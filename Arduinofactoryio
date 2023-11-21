@@ -1,0 +1,117 @@
+//Equipo 2 Electrónica de los sistemas de transporte 
+//Recuerda descargar las librerias
+//Video de referencia del funcionamiento youtube https://www.youtube.com/watch?v=YIG2vcJhb34
+
+
+#include <SPI.h>
+#include <Ethernet.h>
+#include "MgsModbus.h" //Esta libreria se encuentra aqui en github, la tienes que incluir en el proyecto
+
+MgsModbus Mb;  // Creamos una instancia de la clase MgsModbus llamada 'Mb'
+
+byte mac[] = {0x90, 0xA2, 0xDA, 0x0E, 0x94, 0xB5};  // Dirección MAC para la interfaz Ethernet del Arduino
+IPAddress ip(192, 168, 1, 100);  // Configuramos la dirección IP del Arduino
+IPAddress gateway(192, 168, 1, 1);  // Configuramos la dirección del gateway
+IPAddress subnet(255, 255, 255, 0);  // Configuramos la máscara de subred
+
+int pinEntrada = 2;  // Definimos el pin 2 como una entrada digital
+int pinAnalogo = A0;  // Definimos el pin A0 como una entrada analógica
+
+void setup() {
+  // Configuramos los pines D3-D10 como salidas digitales
+  pinMode(3, OUTPUT);
+  pinMode(4, OUTPUT);
+  pinMode(5, OUTPUT);
+  pinMode(6, OUTPUT);
+  pinMode(7, OUTPUT);
+  pinMode(8, OUTPUT);
+  pinMode(9, OUTPUT);
+  pinMode(10, OUTPUT);
+  Ethernet.begin(mac, ip, gateway, subnet);  // Iniciamos la conexión Ethernet
+  // Configuramos los pines A1-A4 como una salida digital
+  pinMode(A1, OUTPUT);  
+  pinMode(A2, OUTPUT);  
+  pinMode(A3, OUTPUT);  
+  pinMode(A4, OUTPUT); 
+}
+
+void loop() {
+  Mb.MbData[0] = 0;  // Inicializamos un registro Modbus con un valor de 0.
+
+  while (true) {
+    // Leemos y escribimos valores en función de bits de registros Modbus
+    digitalWrite(A4, bitRead(Mb.GetBit(0x00), 0));  // Enciende/apaga el LED rojo (factory io) en función del registro Modbus 0x00
+    digitalWrite(3, bitRead(Mb.GetBit(0x01), 0));  // Hace la lectura del botón rojo (factory io) en función del registro Modbus 0x01
+    digitalWrite(A1, bitRead(Mb.GetBit(0x02), 0));  // Enciende/apaga la banda (factory io) en función del registro Modbus 0x02
+    digitalWrite(10, bitRead(Mb.GetBit(0x03), 0));  // Enciende/apaga la alarma (factory io) en función del registro Modbus 0x03
+    digitalWrite(4, bitRead(Mb.GetBit(0x04), 0));  // Enciende/apaga el indicador de señal digital (fisico) en función del registro Modbus 0x04
+    digitalWrite(5, bitRead(Mb.GetBit(0x05), 0));  // Enciende/apaga el indicador de 0-1 Volts en función del registro Modbus 0x05
+    digitalWrite(6, bitRead(Mb.GetBit(0x06), 0));  // Enciende/apaga el indicador de 1-2 Volts en función del registro Modbus 0x06
+    digitalWrite(7, bitRead(Mb.GetBit(0x07), 0));  // Enciende/apaga el indicador de 2-3 Volts en función del registro Modbus 0x07
+    digitalWrite(8, bitRead(Mb.GetBit(0x08), 0));  // Enciende/apaga el indicador de 3-4 Volts en función del registro Modbus 0x08
+    digitalWrite(9, bitRead(Mb.GetBit(0x09), 0));  // Enciende/apaga el indicador de 4-5 Volts en función del registro Modbus 0x09
+
+    int entradaValor = digitalRead(pinEntrada);  // Leemos el valor del pin 2
+
+    int valorAnalogico = analogRead(pinAnalogo);  // Leemos el valor del pin A0
+    float voltaje = map(valorAnalogico, 0, 1023, 0, 5);  // Mapeamos el valor analógico a un rango de 0-5V
+
+    if (entradaValor == HIGH) {  // Si se presiona el botón externo, activamos la banda y el indicador de señal digital
+      Mb.SetBit(0x04, true);  // Establecemos el bit en el registro Modbus 0x04 en verdadero
+      Mb.SetBit(0x02, true);  // Establecemos el bit en el registro Modbus 0x02 en verdadero
+      digitalWrite(A2, HIGH);  // Encendemos el pin A2
+    } else {
+      digitalWrite(A2, LOW);  // Apagamos el pin A2
+      Mb.SetBit(0x04, false);  // Establecemos el bit en el registro Modbus 0x04 en falso
+    }
+
+    if (digitalRead(3) == HIGH) {  // Si se presiona el botón rojo en Factory IO, activamos el relevador externo
+      digitalWrite(A3, HIGH);  // Encendemos el pin A3 (Apagamos relevador)
+      Mb.SetBit(0x00, false);  // Establecemos el bit en el registro Modbus 0x00 en falso
+    } else {
+      digitalWrite(A3, LOW);  // Apagamos el pin A3 (Encendemos relevador)
+      Mb.SetBit(0x00, true);  // Establecemos el bit en el registro Modbus 0x00 en verdadero
+    }
+
+    // Encendemos bits Modbus en función del valor del voltaje
+    if (voltaje >= 0 && voltaje < 1) {
+      Mb.SetBit(0x05, true);
+      Mb.SetBit(0x06, false);
+      Mb.SetBit(0x07, false);
+      Mb.SetBit(0x08, false);
+      Mb.SetBit(0x09, false);
+      Mb.SetBit(0x03, false);
+    } else if (voltaje >= 1 && voltaje < 2) {
+      Mb.SetBit(0x05, true);
+      Mb.SetBit(0x06, true);
+      Mb.SetBit(0x07, false);
+      Mb.SetBit(0x08, false);
+      Mb.SetBit(0x09, false);
+      Mb.SetBit(0x03, false);
+    } else if (voltaje >= 2 && voltaje < 3) {
+      Mb.SetBit(0x05, true);
+      Mb.SetBit(0x06, true);
+      Mb.SetBit(0x07, true);
+      Mb.SetBit(0x08, false);
+      Mb.SetBit(0x09, false);
+      Mb.SetBit(0x03, false);
+    } else if (voltaje >= 3 && voltaje < 4) {
+      Mb.SetBit(0x05, true);
+      Mb.SetBit(0x06, true);
+      Mb.SetBit(0x07, true);
+      Mb.SetBit(0x08, true);
+      Mb.SetBit(0x09, false);
+      Mb.SetBit(0x03, false);
+    } else if (voltaje >= 4) {
+      Mb.SetBit(0x05, true);
+      Mb.SetBit(0x06, true);
+      Mb.SetBit(0x07, true);
+      Mb.SetBit(0x08, true);
+      Mb.SetBit(0x09, true);
+      Mb.SetBit(0x03, true);
+    }
+
+    Mb.MbsRun();  // Procesamos las solicitudes entrantes del maestro Modbus.
+  }
+}
+
